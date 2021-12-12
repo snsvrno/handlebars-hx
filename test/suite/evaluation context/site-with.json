@@ -1,0 +1,10 @@
+{
+    "template": "{{#with person}}{{firstname}} {{lastname}}{{/with}}",
+    "result": "Yehuda Katz",
+    "object": {
+        "person": {
+            "firstname": "Yehuda",
+            "lastname": "Katz"
+        }
+    }
+}

@@ -1,0 +1,6 @@
+-cp test
+-cp lib
+
+-lib termcolors
+
+--macro Test.test()

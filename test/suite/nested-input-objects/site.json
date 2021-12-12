@@ -1,0 +1,10 @@
+{
+    "template": "<p>{{person.firstname}} {{person.lastname}}</p>",
+    "result": "<p>Yehuda Katz</p>",
+    "object": {
+        "person": {
+            "firstname": "Yehuda",
+            "lastname": "Katz"
+        }
+    }
+}
