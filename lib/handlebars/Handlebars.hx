@@ -64,41 +64,11 @@ class Handlebars {
                     renderedText += makeFromBlocks(blocks);
                 });
 
-                /*
-                try {
-                    var array = cast(context.get(scope), Array<Dynamic>);
-                    for (a in array) {
-                        trace(a);
-                    }
-                    //renderedText += makeFromBlocks(blocks);
-                    //context.unset(scope);
-                } catch (e) {
-                    trace('unhandled exception in #each, not an array: $scope');
-                }
-                */
-/*
-                var working = getContext(object, context);
-                if (Std.isOfType(working, Array)) {
-                    for (o in cast(working, Array<Dynamic>)) {
-                        renderedText += makeFromBlocks(o, blocks);
-                    }
-                }
-*/
-
         }
 
         return renderedText;
     }
-/*
-    private function getContext(object : Dynamic, name : Array<String>) : Dynamic {
-        var working = object;
-        for (n in name) {
-            if (Reflect.hasField(working, n)) working = Reflect.getProperty(working, n);
-            else throw "error";
-        }
-        return working;
-    }
-*/
+
     private function parseBlocks(?blockname : String) : Array<Block> {
         var blocks : Array<Block> = [];
 
