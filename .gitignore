@@ -1,0 +1,5 @@
+# compiled test programs.
+*.n
+
+# local haxelib folder.
+.haxelib

@@ -1,0 +1,9 @@
+{
+    "name": "handlebars",
+    "url": "",
+    "license": "MIT",
+    "tags": ["handlebars"],
+    "description": "A handlebars processing engine built in haxe.",
+    "version": "0.0.1",
+    "contributors": ["snsvrno"]
+}

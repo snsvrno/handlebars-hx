@@ -1,6 +1,8 @@
--cp test
+-cp tests
 -cp lib
 
--lib termcolors
+-lib test-engine
 
---macro Test.test()
+-main Process
+
+-neko process.n

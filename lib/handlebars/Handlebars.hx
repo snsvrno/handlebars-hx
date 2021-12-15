@@ -1,22 +1,50 @@
 package handlebars;
 
+using StringTools;
+
 class Handlebars {
 
     private var blocks : Array<Block> = [];
     private final rawtext : String;
 
+    private var context : Null<Context> = null;
+
     private var cursor : Int = -1;
 
+    ////////////////////////////////////////////////////////
+
+    /**
+     * creates a new handlebars parser / processer.
+     */
     public function new(text : String) {
         rawtext = text;
         blocks = parseBlocks();
+
+        //for (b in blocks) trace(b);
     }
 
+    /////////////////////////////////////////////////////////
+
+    /*
+     * creates a string (processed output) using the 
+     * provided object
+     */
     public function make(object : Dynamic) : String {
-        return makeFromBlocks(object, blocks);
+        // sets our working context.
+        context = new Context(object);
+        // renders the result.
+        var result = makeFromBlocks(blocks);
+        // cleanup, remove the context object so we don't accidently
+        // get bleed from this context and another context.
+        context = null;
+        return result;
     }
 
-    private function makeFromBlocks(object : Dynamic, blocks : Array<Block>) : String {
+    /*
+     * internal helper function that makes a string based on the object
+     * and blocks given.
+     */
+    private function makeFromBlocks(blocks : Array<Block>) : String {
         var renderedText = "";
 
         for (b in blocks) switch(b) {
@@ -24,41 +52,44 @@ class Handlebars {
                 renderedText += text;
 
             case Var(name):
+                renderedText += '${context.get(name)}';
 
-                // checking if we are using the "this" keyword.
-                if (name.length == 1 && name[0] == "this") { 
-                    renderedText += '${object}';
-                    continue;
-                }
-
-                // we pop this so when we 'getcontext' we don't all the way
-                // to the final key. then we add it later because this pop
-                // permanently modifies the block.
-                var finalKey = name.pop();
-                var working = getContext(object, name);
-                name.push(finalKey);
-
-                var finalKey = name[name.length-1];
-                renderedText += '${Reflect.getProperty(working, finalKey)}';   
-            
-            case With(context, blocks):
+            case With(scope, blocks):
+/*
                 var working = getContext(object, context);
                 renderedText += makeFromBlocks(working, blocks);
+*/
+            case Each(scope, blocks):
+                context.forEach(scope, function() {
+                    renderedText += makeFromBlocks(blocks);
+                });
 
-            case Each(context, blocks):
+                /*
+                try {
+                    var array = cast(context.get(scope), Array<Dynamic>);
+                    for (a in array) {
+                        trace(a);
+                    }
+                    //renderedText += makeFromBlocks(blocks);
+                    //context.unset(scope);
+                } catch (e) {
+                    trace('unhandled exception in #each, not an array: $scope');
+                }
+                */
+/*
                 var working = getContext(object, context);
                 if (Std.isOfType(working, Array)) {
                     for (o in cast(working, Array<Dynamic>)) {
                         renderedText += makeFromBlocks(o, blocks);
                     }
                 }
-
+*/
 
         }
 
         return renderedText;
     }
-
+/*
     private function getContext(object : Dynamic, name : Array<String>) : Dynamic {
         var working = object;
         for (n in name) {
@@ -67,16 +98,16 @@ class Handlebars {
         }
         return working;
     }
-
+*/
     private function parseBlocks(?blockname : String) : Array<Block> {
         var blocks : Array<Block> = [];
 
         var char;
         var working = "";
-        
+
         while((char = nextChar()) != null) {
             switch(char) {
-                
+
                 // a moustache statement.
                 case "{" if (peakChar() == "{"): 
 
@@ -104,7 +135,6 @@ class Handlebars {
                     while(working.charAt(working.length-1) == " ") working = working.substr(0,working.length-1);
 
                     //////////////////////////////////////////////
-
                     // now checks what we may have.
                     // the closing of a command.
                     if (working.charAt(0) == "/") {
@@ -125,6 +155,17 @@ class Handlebars {
                                 blocks.push(With(parameters[0].split("."), subblocks));
 
                             case "each":
+                                // we want to ignore the first new line after the each
+                                // block, so we are going to check if the first block
+                                // has one first and removes it.
+                                switch(subblocks[0]) {
+                                    case Text(text):
+                                        if (text.trim().length == 0 && text.indexOf("\n") > -1)
+                                            subblocks[0] = Text(text.substr(text.indexOf("\n") + 1));
+
+                                    default:
+                                }
+
                                 blocks.push(Each(parameters[0].split("."), subblocks));
 
                             case unknown:
@@ -133,10 +174,33 @@ class Handlebars {
                     }
 
                     // nothing left, must be a variable.
-                    else blocks.push(Var(working.split(".")));
+                    else {
+                        /*if (working.indexOf("/") != -1) {
+                            // TODO : put some kind of deprecated warning here to let the user know
+                            // that this isn't the ideal way to do this. use '.' instead of '/'
+                        }*/
+
+
+                        var path = [ ];
+
+                        // part of the changing the context, the "parent".
+                        // counts how many times we put "../" at the front.
+                        var parentLevel = 0;
+                        while (working.length > 3 && working.substr(0, 3) == "../") {
+                            path.push("../");
+                            working = working.substr(3);
+                        }
+
+                        for (s in working.split(".")) {
+                            var secondSplit = s.split("/");
+                            while(secondSplit.length > 0) path.push(secondSplit.shift());
+                        }
+
+                        blocks.push(Var(path));
+                    }
 
                     working = "";
-                    
+
                 default: 
                     working += char;
             }

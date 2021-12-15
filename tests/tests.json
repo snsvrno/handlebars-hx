@@ -1,0 +1,7 @@
+{
+    "process": {
+        "input": "hbs",
+        "object": "json",
+        "output": "html"
+    }
+}

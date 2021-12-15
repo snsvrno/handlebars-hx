@@ -1,0 +1,7 @@
+{
+    "people": [
+      { "firstname": "Nils" },
+      { "firstname": "Yehuda" }
+    ],
+    "prefix": "Hello"
+}
