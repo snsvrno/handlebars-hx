@@ -1,97 +1,128 @@
 package handlebars;
 
 class Context {
-	/*** the root object */
-	private var root : Dynamic;
-	/*** the current path of the context. */
-	public var path : Array<String> = [];
-	/*** the current context object */
-	public var value : Dynamic;
+	
+	private final root : Dynamic;
+	private var context : Dynamic;
+	private var path : Array<Path> = [ ];
 
 	public function new(object : Dynamic) {
 		root = object;
-		value = root;
+		context = root;
 	}
 
-	public function get(path : Array<String>, ?fromRoot : Bool = false) : Dynamic {
-		var working = if (fromRoot) root else value;
+	public function get(path : Array<Path>, ?fromRoot : Bool = false) : Null<Dynamic> {
+		var working = if (fromRoot) root else context;
 		
-		// equivalent to a "this"
 		if (path.length == 0) return working;
 
-		// sets the local context.
-		for (i in 0 ... path.length - 1) {
-			if (path[i] == "../") 
-				working = getParent();
-			else if (Reflect.hasField(working, path[i]))
-				working = Reflect.getProperty(working, path[i]);
-			else
-				trace('unhandled error! $path');
+		// getting working to the level we want
+		for (i in 0 ... path.length-1) {
+			switch(path[i]) {
+				case String(text):
+					working = getField(working, text);
+
+				case Parent: 
+					working = getParent();
+
+				case Index(i): throw 'unimplemented';
+			}
 		}
 
-		if (Reflect.hasField(working, path[path.length-1]))
-			return Reflect.getProperty(working, path[path.length-1]);
-		else {
-			trace('unhandled error! $path');
-			return null;
+		// getting the final value.
+		switch(path[path.length-1]) {
+			case String(text):
+				return getField(working, text);
+
+			case Parent: throw 'unimplemented';
+
+			case Index(i):
+				throw 'unimplemented';
 		}
 	}
 
-	public function set(path : Array<String>, ?fromRoot : Bool = false) {
-		// if we are setting from root we don't care about the current path at all.
-		if (fromRoot) {
-			// clean the path.
+	public function set(path : Array<Path>, ?fromRoot : Bool = false) {
+		if (fromRoot) { 
+			context = root;
 			while(this.path.length > 0) this.path.pop();
-			// rest our local root.
-			value = root;
 		}
 
-		for (i in 0 ... path.length) {
-			this.path.push(path[i]);
-			if (Reflect.hasField(value, path[i]))
-				value = Reflect.getProperty(value, path[i]);
-			else trace('unimplemented error $path');
-		}
+		for (p in path) {
+			this.path.push(p);
+			switch(p) {
+				case String(text): 
+					context = getField(context, text);
+				case Parent:
+					throw 'unimplemented';
+				case Index(i):
+					var array = try { cast(context, Array<Dynamic>); }
+					catch (e) { throw 'not an array, cannot set index'; }
 
+					if (i < array.length) context = array[i];
+					else throw 'cannot set ${this.path} to index $i, only has length of ${array.length}';
+			}
+
+			if (context == null) throw 'no such context: $path at $p';
+		}
 	}
 
 	/**
-	 * a special set that iterates through the scope, assuming its an array..
+	 * move backwards in context per the given path.
+	 * will check and confirm that this is the correct
+	 * path before unsetting. will error if not valid
 	 */
-	public function forEach(path : Array<String>, callback : () -> Void) {
-		var array : Array<Dynamic> = try { cast(get(path), Array<Dynamic>); }
-		catch (e) { trace('array error: $path'); []; }
-		set(path);
-		var oldValue = value;
-		for (a in array) {
-			value = a;
-			callback();
+	public function unset(path : Array<Path>) {
+		var i = path.length;
+		while((i-=1) >= 0) switch([this.path[this.path.length-1], path[i]]) {
+
+			case [String(a), String(b)] if (a == b): this.path.pop();
+
+			case [Index(i), Index(j)] if (i == j): this.path.pop();
+
+			default: throw 'invalid path provided to unset: $path';
 		}
-		value = oldValue;
+
+		set(this.path.copy(), true);
+	}
+
+	public function forEach(path : Array<Path>, callback : () -> Void) {
+		// setting the scope
+		set(path);
+
+		var array : Array<Dynamic> = try { cast(context, Array<Dynamic>); }
+		catch(e) { throw '$path is not an array! cannot use #each'; }
+
+		for (i in 0 ... array.length) {
+			var apath : Array<Path> = [Index(i)];
+			set(apath);
+			callback();
+			unset(apath);
+		}
+
+		// clearing the scope
 		unset(path);
 	}
 
-	public function unset(path : Array<String>) {
-		var i = path.length - 1;
-
-		// adjusts the current path to what we want it to be.
-		while(i >= 0) {
-			if (path[i] == this.path[this.path.length-1])
-				this.path.pop();
-			else throw 'error with path';
-			i -= 1;
+	/**
+	 * gets the parent of the current context
+	 */
+	private function getParent(?offset : Int = 0) : Null<Dynamic> {
+		if (this.path.length <= offset) return null;
+		else switch(this.path[this.path.length - 1 - offset]) {
+			case Parent: throw 'unimplemented';
+			case Index(i): return getParent(offset + 1);	
+			case String(text):
+				var parentPath = [ for (i in 0 ... this.path.length - offset - 1) this.path[i]];
+				return get(parentPath, true);
 		}
-
-		// sets the context
-		set(this.path, true);
 	}
 
-	private function getParent() : Null<Dynamic> {
-		if (path.length == 0) return null;
+	inline private static function getField(object : Dynamic, field : String) : Null<Dynamic> {
+		if (Reflect.hasField(object, field))
+			return Reflect.getProperty(object, field);
 		else {
-			var parentPath = [ for (i in 0 ... path.length-1) path[i] ];	
-			return get(parentPath, true);
+			trace('put an error message');
+			return null;
 		}
 	}
 }
-

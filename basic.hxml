@@ -1,0 +1,4 @@
+-cp lib
+-cp tests
+-main Basic
+-neko basic.n

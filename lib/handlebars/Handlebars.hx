@@ -1,195 +1,259 @@
 package handlebars;
 
-using StringTools;
+using Block.BlockTools;
 
 class Handlebars {
 
-    private var blocks : Array<Block> = [];
-    private final rawtext : String;
+	// related to lexing
+	private final rawtext : String;
+	private var cursor : Int = -1;
 
-    private var context : Null<Context> = null;
+	// related to parsing the structure into a rendered output
+	private var blocks : Array<Block> = [];
+	private var context : Context;
 
-    private var cursor : Int = -1;
+	public function new(text : String) {
+		rawtext = text;
+		blocks = lex();
+		for (b in blocks) Sys.println(b.toString());
+	}
 
-    ////////////////////////////////////////////////////////
+	public function make(object : Dynamic) : String {
+		context = new Context(object);
+		return makeBlocks(blocks);
+	}
 
-    /**
-     * creates a new handlebars parser / processer.
-     */
-    public function new(text : String) {
-        rawtext = text;
-        blocks = parseBlocks();
+	private function makeBlocks(blocks : Array<Block>) : String {
+		var renderedText : String = "";
 
-        //for (b in blocks) trace(b);
-    }
+		for (b in blocks) switch(b) {
+			case Text(text): 
+				renderedText += text;
+			
+			case Var(path):
+				renderedText += '${context.get(path)}';
 
-    /////////////////////////////////////////////////////////
+			case Each(path, blocks):
+				context.forEach(path, function() {
+					renderedText += makeBlocks(blocks);
+				});
+		}
 
-    /*
-     * creates a string (processed output) using the 
-     * provided object
-     */
-    public function make(object : Dynamic) : String {
-        // sets our working context.
-        context = new Context(object);
-        // renders the result.
-        var result = makeFromBlocks(blocks);
-        // cleanup, remove the context object so we don't accidently
-        // get bleed from this context and another context.
-        context = null;
-        return result;
-    }
+		return renderedText;
+	}
 
-    /*
-     * internal helper function that makes a string based on the object
-     * and blocks given.
-     */
-    private function makeFromBlocks(blocks : Array<Block>) : String {
-        var renderedText = "";
+	/**
+	 * reads the string and creates blocks.
+	 *
+	 * is used recursively for nexted blocks. if used in a nested
+	 * context it will check that the appropariate closing block
+	 * is found
+	 *
+	 * @param block the block nake when nested
+	 */
+	private function lex(?block : String) : Array<Block> {
+		var blocks : Array<Block> = [];
 
-        for (b in blocks) switch(b) {
-            case Text(text): 
-                renderedText += text;
+		var char;
+		var working = "";
+		var trimText: Bool = false;
 
-            case Var(name):
-                renderedText += '${context.get(name)}';
+		while((char = nextChar()) != null) switch(char) {
+			// a command token
+			case "{" if (peakChar() == "{"):
 
-            case With(scope, blocks):
-/*
-                var working = getContext(object, context);
-                renderedText += makeFromBlocks(working, blocks);
-*/
-            case Each(scope, blocks):
-                context.forEach(scope, function() {
-                    renderedText += makeFromBlocks(blocks);
-                });
+				// consume the moustace
+				nextChar();
 
-        }
+				///////////////////////////////////////////////////
+				// some cleanup since we may have a text block we have been working on
+				// before.
 
-        return renderedText;
-    }
+				// if this exists that means we ignore all white space between the start
+				// of this object and the previous none "whitespace" character.
+				if (peakChar() == "~") {
 
-    private function parseBlocks(?blockname : String) : Array<Block> {
-        var blocks : Array<Block> = [];
+					// consumes the '~'
+					nextChar();
 
-        var char;
-        var working = "";
+					var textblock = createText(working, trimText, true);
+					// get ride of the first line if we determine adhere to whitespace control.
+					if (checkWhitespaceControl(blocks, textblock[0])) textblock.shift();
+					while(textblock.length > 0) blocks.push(textblock.shift());
 
-        while((char = nextChar()) != null) {
-            switch(char) {
+				} else if (working.length > 0) {
+					
+					var textblock = createText(working, trimText, false);
+					// get ride of the first line if we determine adhere to whitespace control.
+					if (checkWhitespaceControl(blocks, textblock[0])) textblock.shift();
+					while(textblock.length > 0) blocks.push(textblock.shift());
+				}
+				
+				working = "";
 
-                // a moustache statement.
-                case "{" if (peakChar() == "{"): 
+				// gets the text inside this block starter
+				while(peakChar(2) != null && peakChar(2) != "}}") working += nextChar();
 
-                    //////////////////////////////////////////////
-                    // CLEANUP BEFORE WE BEGIN
-                    // adds the previous thing as a text block.
-                    if (working.length > 0) {
-                        blocks.push(Text(working));
-                        working = "";
-                    }
+				// checks if we have '~' right at the end, meaning we trim the next set
+				// of whitespace.
+				if (working.length > 0 && working.substr(working.length - 1, 1) == "~") { 
+					trimText = true;
+					working = working.substr(0, working.length - 1);
+				} else trimText = false;
 
-                    // consumes the token
-                    nextChar();
-                    //////////////////////////////////////////////
+				// consumes the '}}'
+				nextChar();
+				nextChar();
 
-                    // checks for the closing moustache.
-                    while(peakChar(2) != null && peakChar(2) != "}}") working += nextChar();
+				// an ending nested block
+				if (working.charAt(0) == "/") {
+					
+					if (block != null && block == working.substr(1))
+						return blocks;
+					else
+						throw 'expected closing $block but found $working instead';
 
-                    // gets the moustache.
-                    nextChar();
-                    nextChar();
+				// a starting nested block
+				} else if (working.charAt(0) == "#") {
 
-                    // trims the white space
-                    while(working.charAt(0) == " ") working = working.substr(1);
-                    while(working.charAt(working.length-1) == " ") working = working.substr(0,working.length-1);
+					var parameters = working.substr(1).split(" ");
+					var command = parameters.shift();
+					var subBlocks = lex(command);
 
-                    //////////////////////////////////////////////
-                    // now checks what we may have.
-                    // the closing of a command.
-                    if (working.charAt(0) == "/") {
-                        var parameters = working.substr(1).split(" ");
-                        var command = parameters.shift();
-                        if (blockname != null && blockname == command)
-                            return blocks;
-                        else 
-                            throw 'expected closing $blockname but found $command instead';
-                    }
-                    // the start of a command
-                    else if (working.charAt(0) == "#") {
-                        var parameters = working.substr(1).split(" ");
-                        var command = parameters.shift();
-                        var subblocks = parseBlocks(command);
-                        switch(command) {
-                            case "with":
-                                blocks.push(With(parameters[0].split("."), subblocks));
+					switch(command) {
+						case "each":
+							blocks.push(Each(parsePath(parameters[0]), subBlocks));
 
-                            case "each":
-                                // we want to ignore the first new line after the each
-                                // block, so we are going to check if the first block
-                                // has one first and removes it.
-                                switch(subblocks[0]) {
-                                    case Text(text):
-                                        if (text.trim().length == 0 && text.indexOf("\n") > -1)
-                                            subblocks[0] = Text(text.substr(text.indexOf("\n") + 1));
+						case unknown: throw 'unimplemented block $command';
+					}
 
-                                    default:
-                                }
+				// a variable / lookup
+				} else
+					blocks.push(Var(parsePath(working)));
+				
+				working = "";
 
-                                blocks.push(Each(parameters[0].split("."), subblocks));
+			// no command token, going to be a text object.
+			default: 
+				working += char;
+		}
 
-                            case unknown:
-                                throw "unknown command:" + unknown;
-                        }
-                    }
+		if (working.length > 0) { 
+			var textblock = createText(working, trimText, false);
+			// get ride of the first line if we determine adhere to whitespace control.
+			if (checkWhitespaceControl(blocks, textblock[0])) textblock.shift();
+			while(textblock.length > 0) blocks.push(textblock.shift());
+		}
 
-                    // nothing left, must be a variable.
-                    else {
-                        /*if (working.indexOf("/") != -1) {
-                            // TODO : put some kind of deprecated warning here to let the user know
-                            // that this isn't the ideal way to do this. use '.' instead of '/'
-                        }*/
+		return blocks;
+	}
 
+	/**
+	 * creates a `Text()` block from the string, will trim the front or rear of
+	 * that string if requested. these trims should only be used when `~` is found
+	 * in moustache blocks before or after this text being created
+	 *
+	 * @param working the string that is converted to text
+	 * @param trimFront remove whitespace from the front
+	 * @param trimRear remove whitespace from the rear
+	 */
+	private function createText(working : String, trimFront : Bool, trimRear : Bool) : Array<Block> {
+		if (trimRear) while(working.length > 0 && isWhitespace(working.charAt(working.length-1))) {
+			working = working.substr(0, working.length-1);
 
-                        var path = [ ];
+		} else if (trimFront) while(working.length > 0 && isWhitespace(working.charAt(0))) {
+			working = working.substr(1);
+		
+		}
 
-                        // part of the changing the context, the "parent".
-                        // counts how many times we put "../" at the front.
-                        var parentLevel = 0;
-                        while (working.length > 3 && working.substr(0, 3) == "../") {
-                            path.push("../");
-                            working = working.substr(3);
-                        }
+		// splits the text into different lines.
+		var lines = [];
+		for (sp1 in working.split("\n")) {
+			var sp2 = sp1.split("\r");
+			while(sp2.length > 0) lines.push(sp2.shift());
+		}
+	
+		var blocks : Array<Block> = [];
+		for (i in 0 ... lines.length) {
+			var text = lines[i];
+			if (i < lines.length-1) text += "\n";
+			blocks.push(Text(text));
+		}
+		return blocks;
+	}
 
-                        for (s in working.split(".")) {
-                            var secondSplit = s.split("/");
-                            while(secondSplit.length > 0) path.push(secondSplit.shift());
-                        }
+	/**
+	 * checks if the new block should be added to the existing set of blocks using the
+	 * whitespace controls per the handlebars spec: https://handlebarsjs.com/guide/expressions.html#whitespace-control
+	 *
+	 * this is only applicable for a 'Text' block that is white space following a 'standalone helper'
+	 *
+	 * the outpoint meanis if we should skip adding this block per whitespace control, so a true means skip because
+	 * whitespace control says we don't want it, false says we keep the block.
+	 */
+	private function checkWhitespaceControl(blocks : Array<Block>, newBlock : Block) : Bool {
+		switch(newBlock) {
 
-                        blocks.push(Var(path));
-                    }
+			// we only care about stopping a block from being added if it is a text block
+			// and only contains whitespace, so all other blocks passe as 'newblock' will
+			// just return a `false`
+			case Text(text):
 
-                    working = "";
+				// we only can remove whitespace if we have a special block...
+				if (blocks.length > 0) switch(blocks[blocks.length-1]) {
+					case Each(_,_):
+					default: return false;
+				}
 
-                default: 
-                    working += char;
-            }
-        }
+				// checks if the text is all "whitespace" per the spec.
+				var iswhitespace = true;
+				for (i in 0 ... text.length) if (isWhitespace(text.charAt(i)) == false) {
+					iswhitespace = false;
+					break;
+				}
 
-        if (working.length > 0) blocks.push(Text(working));
+				return iswhitespace;
 
-        return blocks;
-    }
+			// not a text block, so we don't skip it.
+			default: return false;
+		}
+	}
 
+	/////////////////////////////////////////////////////////////////////////////
+	// INLINE FUNCTIONS (for cleanliness)
 
-    inline private function nextChar() : Null<String> {
-        if (cursor < rawtext.length) return rawtext.charAt(cursor += 1);
-        else return null;
-    }
+	/**
+	 * checks if the character is a whitespace .. using the definition of 
+	 * whitespace from hadnlebars ... which is a space, a tab, or a newline
+	 */
+	inline private function isWhitespace(char : String) : Bool {
+		return char == "\n" || char == " " || char == "\t";
+	}
 
-    inline private function peakChar(?size = 1) : Null<String> {
-        if (cursor + size - 1 < rawtext.length) return rawtext.substr(cursor + 1, size);
-        else return null;
-    }
+	inline private function nextChar() : Null<String> {
+		if (cursor < rawtext.length) return rawtext.charAt(cursor += 1);
+  	else return null;
+	}
+
+	inline private function peakChar(?size = 1) : Null<String> {
+		if (cursor + size - 1 < rawtext.length) return rawtext.substr(cursor + 1, size);
+		else return null;
+	}
+
+	inline private function parsePath(working : String) : Array<Path> {
+		var path : Array<Path> = [];
+
+		while(working.length > 3 && working.substr(0,3) == "../") {
+			path.push(Parent);
+			working = working.substr(3);
+		}
+
+		for (s in working.split(".")) {
+			var second = s.split("/");
+			while(second.length > 0) path.push(String(second.shift()));
+		}
+
+		return path;
+	}
 
 }
