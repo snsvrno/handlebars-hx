@@ -15,7 +15,7 @@ class Handlebars {
 	public function new(text : String) {
 		rawtext = text;
 		blocks = lex();
-		for (b in blocks) Sys.println(b.toString());
+		//for (b in blocks) Sys.println(b.toString());
 	}
 
 	public function make(object : Dynamic) : String {
