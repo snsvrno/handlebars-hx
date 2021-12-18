@@ -5,8 +5,8 @@ using Path.PathArrayTools;
 
 enum Block {
 	Text(text:String);
-	Var(path:Array<Path>);
-	Each(path:Array<Path>, blocks: Array<Block>);
+	Var(path:Array<Path>, escaped : Bool);
+	Each(path:Array<Path>, blocks: Array<Block>, escaped : Bool);
 }
 
 class BlockTools {
@@ -19,9 +19,9 @@ class BlockTools {
 		switch(block) {
 			case Text(text): 
 				return '<Text "${replaceSpecials(text)}">';
-			case Var(path):
+			case Var(path, escaped):
 				return '<Var "${PathArrayTools.toString(path)}">';
-			case Each(path, blocks):
+			case Each(path, blocks, escaped):
 				var blocktext = "";
 
 				blocktext += '<Each "${PathArrayTools.toString(path)}">\n';

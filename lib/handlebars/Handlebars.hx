@@ -1,6 +1,7 @@
 package handlebars;
 
 using Block.BlockTools;
+using StringTools;
 
 class Handlebars {
 
@@ -23,19 +24,21 @@ class Handlebars {
 		return makeBlocks(blocks);
 	}
 
-	private function makeBlocks(blocks : Array<Block>) : String {
+	private function makeBlocks(blocks : Array<Block>, ?forceEscaped : Bool = false) : String {
 		var renderedText : String = "";
 
 		for (b in blocks) switch(b) {
 			case Text(text): 
 				renderedText += text;
 			
-			case Var(path):
-				renderedText += '${context.get(path)}';
+			case Var(path, escaped):
+				var vartext = '${context.get(path)}';
+				if (escaped || forceEscaped) vartext = htmlEscape(vartext);
+				renderedText += vartext;
 
-			case Each(path, blocks):
+			case Each(path, blocks, escaped):
 				context.forEach(path, function() {
-					renderedText += makeBlocks(blocks);
+					renderedText += makeBlocks(blocks, escaped);
 				});
 		}
 
@@ -64,6 +67,12 @@ class Handlebars {
 
 				// consume the moustace
 				nextChar();
+
+				// checks if this is a "raw ({{{) or html-escaped ({{) block
+				var escaped : Bool = if (peakChar() == "{") {
+					nextChar();
+					false;
+				} else true;
 
 				///////////////////////////////////////////////////
 				// some cleanup since we may have a text block we have been working on
@@ -102,8 +111,9 @@ class Handlebars {
 				} else trimText = false;
 
 				// consumes the '}}'
-				nextChar();
-				nextChar();
+				checkForChar("}", nextChar());
+				checkForChar("}", nextChar());
+				if (escaped == false) checkForChar("}", nextChar());
 
 				// an ending nested block
 				if (working.charAt(0) == "/") {
@@ -122,14 +132,14 @@ class Handlebars {
 
 					switch(command) {
 						case "each":
-							blocks.push(Each(parsePath(parameters[0]), subBlocks));
+							blocks.push(Each(parsePath(parameters[0]), subBlocks, escaped));
 
 						case unknown: throw 'unimplemented block $command';
 					}
 
 				// a variable / lookup
 				} else
-					blocks.push(Var(parsePath(working)));
+					blocks.push(Var(parsePath(working), escaped));
 				
 				working = "";
 
@@ -154,6 +164,7 @@ class Handlebars {
 	 * in moustache blocks before or after this text being created
 	 *
 	 * @param working the string that is converted to text
+	 * @param escaped if the block was a '{{' (escaped) block or a '{{{' (raw)
 	 * @param trimFront remove whitespace from the front
 	 * @param trimRear remove whitespace from the rear
 	 */
@@ -201,7 +212,7 @@ class Handlebars {
 
 				// we only can remove whitespace if we have a special block...
 				if (blocks.length > 0) switch(blocks[blocks.length-1]) {
-					case Each(_,_):
+					case Each(_, _, _):
 					default: return false;
 				}
 
@@ -256,4 +267,22 @@ class Handlebars {
 		return path;
 	}
 
+	inline private function checkForChar(a : String, b : String, ?pos : haxe.PosInfos) {
+		if (a != b) throw 'expected "$a" but found "$b"';
+	}
+
+	inline private function htmlEscape(text : String) : String {
+		var newtext = "";
+		for (i in 0 ... text.length) newtext += switch(text.charAt(i)) {
+			case "&": "&amp;";
+			case "<": "&lt;";
+			case ">": "&gt;";
+			case "\"": "&quot;";
+			case "'": "&#x27;";
+			case "`": "&#x60;";
+			case "=": "&#x3D;";
+			case other: other;
+		}
+		return newtext;
+	}
 }
