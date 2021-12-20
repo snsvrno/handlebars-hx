@@ -16,7 +16,7 @@ class Handlebars {
 	public function new(text : String) {
 		rawtext = text;
 		blocks = lex();
-		//for (b in blocks) Sys.println(b.toString());
+		// for (b in blocks) Sys.println(b.toString());
 	}
 
 	public function make(object : Dynamic) : String {
@@ -254,17 +254,91 @@ class Handlebars {
 	inline private function parsePath(working : String) : Array<Path> {
 		var path : Array<Path> = [];
 
-		while(working.length > 3 && working.substr(0,3) == "../") {
-			path.push(Parent);
-			working = working.substr(3);
-		}
+		var segment : Null<String>;
+		while((segment = getNextSegment(working)) != null) {
 
-		for (s in working.split(".")) {
-			var second = s.split("/");
-			while(second.length > 0) path.push(String(second.shift()));
-		}
+			// this is a little messy and i'll forget what is going on here at one point ...
+			// so normally i'd make the `getNextSegment` function shrink down the `working`
+			// string .. but i can't do that because this is all "static" and `working` doesn't
+			// exist in either context. ... so we are shrinking it based on the output of the 
+			// `getNextSegment` function. this will miss separators, so we need to add the 
+			// length of the separator if its not a "Parent" or a "Current". doing this down
+			// in the next section.
+			working = working.substr(segment.length);
+
+			// checking for the special 'parent'
+			if (segment == "../") path.push(Parent);
+			// checking for the special 'current'
+			else if (segment == "./") path.push(Current);
+			// a 'captured' string.
+			else if (segment.charAt(0) == "[") {
+				var insides = segment.substr(1, segment.length-2);
+				var int : Null<Int>;
+				if ((int = Std.parseInt(insides)) != null) path.push(Index(int));
+				else path.push(String(insides));
+				// removing the separator.
+				working = working.substr(1);
+			}
+			// a plain string
+			else { 
+
+				if (!validateSegmentLiterals(segment)) throw 'found illegal character in segment: $segment';
+
+				// now we need to check if we are using any reserved characters, but the trick is we _can_ use them, but
+				// we cannot use them as the last part of the path, unless it is the only part of the path ...
+				if (working.length == 0) switch(segment) {
+					case "true" | "false" | "undefined" | "null":
+						throw 'cannot use special text $segment';
+					default: // is ok.
+				}
+				path.push(String(segment));
+				working = working.substr(1);
+			}
+	}
 
 		return path;
+	}
+
+	private function getNextSegment(text : String) : Null<String> {
+		if (text.length == 0) return null
+		else if (text.length > 3 && text.substr(0,3) == "../") return "../";
+		else if (text.length > 2 && text.substr(0,2) == "./") return "./";
+		else {
+			var sep : Int = 0;
+			var quoted : Null<String> = null;
+			for (i in 0 ... text.length) {
+				
+				var char = text.charAt(i);
+				switch([quoted, char]) {
+					case ["[", "]"]: 
+						quoted = null;
+						continue;
+
+
+					case [null, "."] | [null, "/"]:
+						return text.substr(0, i);
+
+					default:
+				}
+			}
+		}
+
+		return text;
+	}
+
+	/**
+	 * checks the string characters against a list of invalid literals. will return
+	 * a true if this passes the test.
+	 */
+	private function validateSegmentLiterals(text : String) : Bool {
+		for (i in 0 ... text.length) switch(text.charAt(i)) {
+			case " " | "!" | "\"" | "#" | "%" | "'" | "("
+				| ")" | "*" | "+" | "," | "." | "/" | ";"
+				| "<" | ">" | "=" | "@" | "[" | "\\" | "]"
+				| "^" | "`" | "{" | "|" | "}" | "~" | "-" : return false;
+		}
+
+		return true;
 	}
 
 	inline private function checkForChar(a : String, b : String, ?pos : haxe.PosInfos) {
@@ -284,5 +358,29 @@ class Handlebars {
 			case other: other;
 		}
 		return newtext;
+	}
+
+	inline private function split(string : String, ... chars:String) : Array<String> {
+		var items = [ ];
+		
+		var working = "";
+		var char = "";
+
+		for (i in 0 ... string.length) {
+			char = string.charAt(i);
+			var splitdelim = false;
+
+			for (c in chars) if (c == char) splitdelim = true;
+			
+			if (splitdelim) {
+				items.push(working);
+				working = "";
+			}
+			else working += char;
+
+		}
+
+		if (working.length > 0) items.push(working);
+		return items;
 	}
 }

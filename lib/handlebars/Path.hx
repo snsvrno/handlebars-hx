@@ -4,6 +4,7 @@ enum Path {
 	String(string : String);
 	Index(i : Int);
 	Parent;
+	Current;
 }
 
 class PathTools {
@@ -13,6 +14,7 @@ class PathTools {
 			case String(string): return string;
 			case Index(i): return '[$i]';
 			case Parent: return "../";
+			case Current: return "./";
 		}
 	}
 }

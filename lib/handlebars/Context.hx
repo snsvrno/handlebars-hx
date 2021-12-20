@@ -12,12 +12,12 @@ class Context {
 	}
 
 	public function get(path : Array<Path>, ?fromRoot : Bool = false) : Null<Dynamic> {
-		var working = if (fromRoot) root else context;
-		
+		var working : Dynamic = if (fromRoot) root else context;
+
 		if (path.length == 0) return working;
 
 		// getting working to the level we want
-		for (i in 0 ... path.length-1) {
+		for (i in 0 ... path.length) {
 			switch(path[i]) {
 				case String(text):
 					working = getField(working, text);
@@ -25,10 +25,22 @@ class Context {
 				case Parent: 
 					working = getParent();
 
-				case Index(i): throw 'unimplemented';
+				case Current:
+					// working = working;
+
+				case Index(index): 
+					var array = try { cast(working, Array<Dynamic>); }
+					catch (e) { throw 'can only use an index if this is an array: $e'; }
+
+					if (index >= array.length) throw 'cannot index value $index since array is only ${array.length} long.';
+					
+					working = array[index];
 			}
 		}
 
+		return working;
+
+		/*
 		// getting the final value.
 		switch(path[path.length-1]) {
 			case String(text):
@@ -37,8 +49,13 @@ class Context {
 			case Parent: throw 'unimplemented';
 
 			case Index(i):
-				throw 'unimplemented';
-		}
+				var array = try { cast(working, Array<Dynamic>); }
+				catch (e) { throw 'can only use an index if this is an array: $e'; }
+
+				if (i >= array.length) throw 'cannot index value $i since array is only ${array.length} long.';
+
+									 // throw 'unimplemented';
+		}*/
 	}
 
 	public function set(path : Array<Path>, ?fromRoot : Bool = false) {
@@ -52,8 +69,13 @@ class Context {
 			switch(p) {
 				case String(text): 
 					context = getField(context, text);
+				
+				case Current:
+					// context = context;
+				
 				case Parent:
-					throw 'unimplemented';
+					context = getParent();
+
 				case Index(i):
 					var array = try { cast(context, Array<Dynamic>); }
 					catch (e) { throw 'not an array, cannot set index'; }
@@ -110,6 +132,7 @@ class Context {
 		if (this.path.length <= offset) return null;
 		else switch(this.path[this.path.length - 1 - offset]) {
 			case Parent: throw 'unimplemented';
+			case Current: throw 'unimplemented';
 			case Index(i): return getParent(offset + 1);	
 			case String(text):
 				var parentPath = [ for (i in 0 ... this.path.length - offset - 1) this.path[i]];
@@ -121,7 +144,7 @@ class Context {
 		if (Reflect.hasField(object, field))
 			return Reflect.getProperty(object, field);
 		else {
-			trace('put an error message');
+			throw 'put an error message';
 			return null;
 		}
 	}
