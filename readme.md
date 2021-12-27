@@ -24,4 +24,4 @@ Each test is made of at least 2 and up to 3 files:
 - **[name].json** : the data object used by the template to generate the output
 - **[name].html** : the rendered output 
 
-The output is option. If there is no output file then [test-engine](https://github.com/snsvrno/test-engine) will assume that this should be a failing test, and the test will pass if it gets an error.
+The output is optional. If there is no output file then [test-engine](https://github.com/snsvrno/test-engine) will assume that this should be a failing test, and the test will pass if it gets an error.
