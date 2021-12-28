@@ -3,3 +3,6 @@
 
 # local haxelib folder.
 .haxelib
+
+# local notes
+diary/

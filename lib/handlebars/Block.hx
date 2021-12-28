@@ -7,6 +7,8 @@ enum Block {
 	Text(text:String);
 	Var(path:Array<Path>, escaped : Bool);
 	Each(path:Array<Path>, blocks: Array<Block>, escaped : Bool);
+	If(condition:Block, trueStatement: Array<Block>, elseStatement: Array<Block>);
+	Helper(name : String, parameters : Array<Block>);
 }
 
 class BlockTools {
@@ -19,8 +21,10 @@ class BlockTools {
 		switch(block) {
 			case Text(text): 
 				return '<Text "${replaceSpecials(text)}">';
+
 			case Var(path, escaped):
 				return '<Var "${PathArrayTools.toString(path)}">';
+
 			case Each(path, blocks, escaped):
 				var blocktext = "";
 
@@ -29,6 +33,21 @@ class BlockTools {
 				blocktext += '</Each>\n';
 				
 				return blocktext;
+
+			case If(condition, trueStatement, elseStatement):
+				var blocktext = "";
+
+				blocktext += '<If "${toString(condition)}">\n';
+				for (b in trueStatement) blocktext += '    ' + toString(b) + "\n";
+				if (elseStatement.length > 0) {
+					blocktext += '<Else>\n';
+					for (b in elseStatement) blocktext += '    ' + toString(b) + "\n";
+				}
+
+				return blocktext;
+
+			case Helper(name, parameters):
+				return '<$name "${parameters.join(", ")}">\n';
 		}
 	}
 

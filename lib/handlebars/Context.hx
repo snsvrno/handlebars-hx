@@ -67,7 +67,7 @@ class Context {
 		for (p in path) {
 			this.path.push(p);
 			switch(p) {
-				case String(text): 
+				case String(text):
 					context = getField(context, text);
 				
 				case Current:
@@ -144,7 +144,6 @@ class Context {
 		if (Reflect.hasField(object, field))
 			return Reflect.getProperty(object, field);
 		else {
-			throw 'put an error message';
 			return null;
 		}
 	}

@@ -1,7 +1,6 @@
 {
     "process": {
-        "input": "hbs",
-        "object": "json",
+        "input": [ "hbs", "json", "hxs" ],
         "output": "html"
     }
 }

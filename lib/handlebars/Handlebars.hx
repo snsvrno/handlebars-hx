@@ -12,11 +12,16 @@ class Handlebars {
 	// related to parsing the structure into a rendered output
 	private var blocks : Array<Block> = [];
 	private var context : Context;
+	private var helpers : Map<String, Helper> = new Map();
 
 	public function new(text : String) {
 		rawtext = text;
 		blocks = lex();
-		// for (b in blocks) Sys.println(b.toString());
+		//for (b in blocks) Sys.println(b.toString());
+	}
+	
+	public function registerHelper(name : String, helper : Helper) {
+		helpers.set(name, helper);
 	}
 
 	public function make(object : Dynamic) : String {
@@ -40,6 +45,33 @@ class Handlebars {
 				context.forEach(path, function() {
 					renderedText += makeBlocks(blocks, escaped);
 				});
+
+			case If(condition, trueStatement, elseStatement):
+				var value : Null<Dynamic> = switch(condition) {
+					case Var(path, _): context.get(path);
+					default: null;
+				};
+
+				if (value == false || value == null || value == 0 || (Std.isOfType(value, Array) && value.length == 0)) {
+					// we fail the condition, then lets do the elseStatement and keep going.
+					renderedText += makeBlocks(elseStatement, forceEscaped);
+				} else {
+					renderedText += makeBlocks(trueStatement, forceEscaped);
+				}
+
+			case Helper(name, rawparameters):
+				var helper = helpers.get(name);
+				if (helper == null) throw 'no helper named "$name" is registered.';
+
+				var parameters : Array<String> = [];
+
+				for (rp in rawparameters) switch(rp) {
+					case Text(text): parameters.push(text);
+					case Var(path, _): parameters.push(context.get(path));
+					case other: throw 'this is an error: $other';
+				}
+
+				renderedText += helper(parameters);
 		}
 
 		return renderedText;
@@ -134,8 +166,31 @@ class Handlebars {
 						case "each":
 							blocks.push(Each(parsePath(parameters[0]), subBlocks, escaped));
 
+						case "if":
+							var trueStatement : Array<Block> = [];
+							while(subBlocks.length > 0) switch(subBlocks.shift()) {
+								case Var(path, _) if (path.toString() == "[String(else)]"): break;
+								case other: trueStatement.push(other);
+							}
+							blocks.push(If(parseCondition(parameters.join(" ")), trueStatement, subBlocks));
+
 						case unknown: throw 'unimplemented block $command';
 					}
+
+				// a helper function
+				} else if (working.indexOf(" ") > 0) {
+					var list = split(working, " ");
+					var name = list.shift();
+					var parameters : Array<Block> = [];
+					for (li in list) {
+						if (li.charAt(0) == "\"" || li.charAt(0) == "\'") parameters.push(Text(li.substr(1, li.length-2)));
+						else {
+							var path = parsePath(li);
+							parameters.push(Var(path, false));
+						}
+					}
+
+					blocks.push(Helper(name, parameters));
 
 				// a variable / lookup
 				} else
@@ -193,6 +248,10 @@ class Handlebars {
 		return blocks;
 	}
 
+	private function parseCondition(conditionText : String) : Block {
+		return Var(parsePath(conditionText), false);
+	}
+
 	/**
 	 * checks if the new block should be added to the existing set of blocks using the
 	 * whitespace controls per the handlebars spec: https://handlebarsjs.com/guide/expressions.html#whitespace-control
@@ -213,6 +272,8 @@ class Handlebars {
 				// we only can remove whitespace if we have a special block...
 				if (blocks.length > 0) switch(blocks[blocks.length-1]) {
 					case Each(_, _, _):
+					case If(_, _, _):
+					case Var(path, _) if (path.toString() == "[String(else)]"):
 					default: return false;
 				}
 
@@ -283,6 +344,9 @@ class Handlebars {
 			else { 
 
 				if (!validateSegmentLiterals(segment)) throw 'found illegal character in segment: $segment';
+
+				// checks if we have a number, which is not valid.
+				if (Std.parseInt(segment) != null) throw 'invalid index $segment, must use "[$segment]"';
 
 				// now we need to check if we are using any reserved characters, but the trick is we _can_ use them, but
 				// we cannot use them as the last part of the path, unless it is the only part of the path ...

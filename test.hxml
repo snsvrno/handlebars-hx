@@ -1,6 +1,7 @@
 -cp tests
 -cp lib
 
+-lib hscript
 -lib test-engine
 
 -main Process

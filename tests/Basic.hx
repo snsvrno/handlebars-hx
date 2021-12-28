@@ -5,6 +5,9 @@ class Basic {
 		var object = haxe.Json.parse(sys.io.File.getContent(file + ".json"));
 	
 		var hb = new handlebars.Handlebars(contents);
+		hb.registerHelper("greeting", (params:Array<String>) -> {
+			return 'Hello ${params[0]}';
+		});
 		Sys.print(hb.make(object));
 	}
 }

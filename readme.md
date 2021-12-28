@@ -3,6 +3,11 @@ Haxe implementation of the [Handlebars](https://handlebarsjs.com/) templating en
 
 **IN PROGRESS, NOT FEATURE COMPLETE**
 
+## HXML Files
+
+- **basic.hxml** builds a small neko app that takes a test name as a parameter and runs the output of that test.
+- **test.hxml** builds the neko files required for testing the library.
+
 ## Tests
 
 As of the creation of this project, I did not find a good test suite that could be used that is javascript agnostic. So I decided to make my own based on the examples and explainations at the [Handlebars Guide](https://handlebarsjs.com/guide/). In the future the tests from the [spec/ from the github repository](https://github.com/handlebars-lang/handlebars.js/tree/master/spec) should be ported over in order to use the same test suite as the original engine.
